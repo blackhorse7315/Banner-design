@@ -142,26 +142,36 @@ function readImage(e,cb){let f=e.target.files[0];if(!f)return;let reader=new Fil
 async function savePNG(){
  const btn=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()==='Save PNG');
  if(btn){btn.disabled=true;btn.textContent='Rendering PNG...'}
+ let holder=null;
  try{
-  const original=document.getElementById('banner');
-  const clone=original.cloneNode(true);
-  clone.style.cssText='width:720px!important;min-width:720px!important;zoom:1!important;transform:none!important;margin:0!important;position:relative!important;box-shadow:none!important';
-  const holder=document.createElement('div');holder.style.cssText='position:fixed;left:-9999px;top:0;width:720px;z-index:-1';holder.appendChild(clone);document.body.appendChild(holder);
+  if(typeof window.html2canvas!=='function'){
+   await new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    script.onload=resolve;script.onerror=()=>reject(new Error('Library PNG tidak dapat dimuat. Periksa koneksi internet.'));
+    document.head.appendChild(script);
+   });
+  }
+  const source=document.getElementById('banner');
+  const clone=source.cloneNode(true);
+  clone.style.cssText='width:720px!important;min-width:720px!important;zoom:1!important;transform:none!important;margin:0!important;box-shadow:none!important;';
+  holder=document.createElement('div');
+  holder.style.cssText='position:fixed;left:0;top:0;width:720px;z-index:-9999;opacity:1;pointer-events:none;transform:translateX(-200vw)';
+  holder.appendChild(clone);document.body.appendChild(holder);
   await Promise.all([...clone.querySelectorAll('img')].map(im=>im.decode().catch(()=>{})));
-  const width=720,height=Math.ceil(clone.scrollHeight);
-  const css=[...document.styleSheets].map(sheet=>{try{return [...sheet.cssRules].map(r=>r.cssText).join('\n')}catch{return ''}}).join('\n');
-  const html=new XMLSerializer().serializeToString(clone).replace(/<img([^>]*?)>/g,'<img$1 />');
-  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+width+'" height="'+height+'"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>'+css.replace(/<\/style/gi,'<\\/style')+'</style>'+html+'</div></foreignObject></svg>';
-  const blob=new Blob([svg],{type:'image/svg+xml;charset=utf-8'}),url=URL.createObjectURL(blob);
-  const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=url});
-  const canvas=document.createElement('canvas');canvas.width=width*2;canvas.height=height*2;
-  const ctx=canvas.getContext('2d');ctx.scale(2,2);ctx.drawImage(img,0,0,width,height);
-  URL.revokeObjectURL(url);holder.remove();
-  const out=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
-  if(!out)throw Error('Browser memblokir konversi PNG pada file lokal.');
-  const a=document.createElement('a');a.href=URL.createObjectURL(out);a.download='Transwisata-Fleet-Banner.png';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),15000);
- }catch(err){alert('Save PNG gagal di browser ini: '+err.message+'\nCoba buka HTML melalui hosting HTTPS atau gunakan Print A4 → Save as PDF.')}finally{if(btn){btn.disabled=false;btn.textContent='Save PNG'}}
-}function saveProject(){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));a.download='transwisata-fleet-banner-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)}function importProject(e){let f=e.target.files[0];if(!f)return;f.text().then(s=>{let d=JSON.parse(s);if(!Array.isArray(d.planes)||d.planes.length!==5)throw Error('Project tidak valid');data=d;buildEditors();render()}).catch(e=>alert('Gagal membuka project: '+e.message))}
+  await document.fonts?.ready;
+  const height=Math.ceil(Math.max(clone.scrollHeight,clone.getBoundingClientRect().height));
+  const canvas=await window.html2canvas(clone,{backgroundColor:'#ffffff',scale:2,useCORS:true,allowTaint:false,logging:false,width:720,height:height,windowWidth:900,scrollX:0,scrollY:0});
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+  if(!blob)throw new Error('Gagal mengonversi gambar ke PNG.');
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='Transwisata-Fleet-Banner.png';document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+ }catch(err){
+  alert('Save PNG gagal: '+(err?.message||String(err))+'\nPastikan koneksi internet aktif dan coba lagi.');
+ }finally{if(holder)holder.remove();if(btn){btn.disabled=false;btn.textContent='Save PNG'}}
+}
+function saveProject(){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data)],{type:'application/json'}));a.download='transwisata-fleet-banner-project.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)}function importProject(e){let f=e.target.files[0];if(!f)return;f.text().then(s=>{let d=JSON.parse(s);if(!Array.isArray(d.planes)||d.planes.length!==5)throw Error('Project tidak valid');data=d;buildEditors();render()}).catch(e=>alert('Gagal membuka project: '+e.message))}
 function fitPreview(){
  const workspace=document.getElementById('workspace');const banner=document.getElementById('banner');
  if(!workspace||!banner)return;
